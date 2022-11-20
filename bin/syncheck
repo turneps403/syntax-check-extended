@@ -10,15 +10,17 @@ use Syntax::Check;
 my $keep    = 0;
 my $verbose = 0;
 my $help    = 0;
+my $ext_package = "";
 
 GetOptions (
     "keep"      => \$keep,
     "verbose"   => \$verbose,
     "help"      => \$help,
+    "ext=s"     => \$ext_package,
 );
 
 if ($help) {
-    say "\nUSAGE: ./syncheck [-v|--verbose] [-k|--keep] perl_filename.ext\n";
+    say "\nUSAGE: ./syncheck [-v|--verbose] [-k|--keep] [--ext=path/ext/package.pm] perl_filename.ext\n";
     exit;
 }
 
@@ -29,7 +31,8 @@ if (! @ARGV || ! -f $ARGV[0]) {
 Syntax::Check->new(
     file    => $ARGV[0],
     verbose => $verbose,
-    keep    => $keep
+    keep    => $keep,
+    ext     => $ext_package,
 )->check;
 
 __END__
@@ -62,6 +65,27 @@ temp dir. By default we delete this directory upon program completion.
 =head2 --verbose|-v
 
 Supply this argument to get verbose output.
+
+=head2 --ext=path/ext/package.pm
+
+Optional. When it's set then content of that file will be interpreted as part of main package. 
+As perl allows keep many packages in the same file that helps you have a deal with:
+
+=over 4
+
+=item *
+
+constant exported from uninstalled packages
+
+=item *
+
+functions (even with protothypes) exported from uninstalled packages
+
+=item *
+
+custom pragmas and artifacts
+
+=back
 
 =head2 perl_file.ext
 

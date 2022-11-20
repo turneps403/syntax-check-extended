@@ -9,10 +9,11 @@ use Data::Dumper;
 use Exporter qw(import);
 use File::Path qw(make_path);
 use File::Temp qw(tempdir);
+use File::Copy qw(copy);
 use Module::Installed qw(module_installed);
 use PPI;
 
-our $VERSION = '1.06';
+our $VERSION = '1.10';
 
 my $SEPARATOR;
 
@@ -33,12 +34,21 @@ sub new {
         croak "new() requires a file name as its first parameter";
     }
 
+    if ($p{ext} && (! -f $p{ext} || ! -r _)) {
+        croak "'ext' was sent to new() but it's not a file or unreadable: ".$p{ext};
+    }
+
     my $self = bless {%p}, $class;
 
     return $self;
 }
 sub check {
     my ($self) = @_;
+
+    if ($self->{ext}) {
+        $self->_create_lib_dir;
+        copy($self->{ext}, $self->{lib}."/main.pm") || croak $!;
+    }
 
     my $doc = PPI::Document->new($self->{file});
 
@@ -100,6 +110,9 @@ sub check {
 
     if (! $self->{lib}) {
         `perl -c $self->{file}`;
+    }
+    else if ($self->{ext}) {
+        `perl -I$self->{lib} -Mmain -c $self->{file}`;
     }
     else {
         `perl -I$self->{lib} -c $self->{file}`;
@@ -169,6 +182,27 @@ Default: False
 Optional, Bool: Enable verbose output.
 
 Default: False
+
+    ext => path/to/ext/package.pm
+
+Optional, String: When it's set then content of that file will be interpreted as part of main package. 
+As perl allows keep many packages in the same file that helps you have a deal with:
+
+=over 4
+
+=item *
+
+constant exported from uninstalled packages
+
+=item *
+
+functions (even with protothypes) exported from uninstalled packages
+
+=item *
+
+custom pragmas and artifacts
+
+=back
 
     $file
 
