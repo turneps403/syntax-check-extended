@@ -18,6 +18,8 @@ our $VERSION = '1.10';
 
 my $SEPARATOR;
 
+my $PRAGMA_RE = qr/^(attributes|autodie|autouse|base|bigint|bignum|bigrat|blib|bytes|charnames|constant|diagnostics|encoding|feature|fields|filetest|if|integer|less|lib|locale|mro|open|ops|overload|overloading|parent|re|sigtrap|sort|strict|subs|threads|threads::shared|utf8|vars|vmsish|warnings|warnings::register)/;
+
 BEGIN {
     if ($^O =~ /^(dos|os2)/i) {
         $SEPARATOR = '\\';
@@ -66,7 +68,7 @@ sub check {
         my $module = $include->module;
         my $package = $module;
 
-        if ($module eq lc $module) {
+        if ($module =~ $PRAGMA_RE) {
             # Skip pragmas
             say "Skipping assumed pragma '$module'" if $self->{verbose};
             next;
@@ -121,6 +123,8 @@ sub check {
     my $I = join(" ", map {"-I $_"} @{$self->{inc}});
 
     my $M = $self->{ext} ? "-Mmain" : "";
+
+    say "RUN as: perl $I $M -wc $self->{file}" if $self->{verbose};
 
     `perl $I $M -wc $self->{file}`;
 }
