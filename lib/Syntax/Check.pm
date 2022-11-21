@@ -111,7 +111,7 @@ sub check {
     if (! $self->{lib}) {
         `perl -c $self->{file}`;
     }
-    else if ($self->{ext}) {
+    elsif ($self->{ext}) {
         `perl -I$self->{lib} -Mmain -c $self->{file}`;
     }
     else {
