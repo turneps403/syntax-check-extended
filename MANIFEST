@@ -16,9 +16,11 @@ t/pod.t
 t/07-check_ext_fail.t
 t/08-check_ext_succ.t
 t/09-check_inc.t
+t/10-check_pragma.t
 t/data/ext/export.pl
 t/data/ext/export.pm
 t/data/ext/hello.pl
 t/data/ext/hello.pm
 t/data/inc/hello.pl
 t/data/inc/lib/Foo.pm
+t/data/pragma.pl
