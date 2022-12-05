@@ -10,15 +10,19 @@ use Syntax::Check;
 my $keep    = 0;
 my $verbose = 0;
 my $help    = 0;
+my $ext_package = "";
+my $inc     = [];
 
 GetOptions (
     "keep"      => \$keep,
     "verbose"   => \$verbose,
     "help"      => \$help,
+    "ext=s"     => \$ext_package,
+    "inc=s@"    => \$inc,
 );
 
 if ($help) {
-    say "\nUSAGE: ./syncheck [-v|--verbose] [-k|--keep] perl_filename.ext\n";
+    say "\nUSAGE: ./syncheck [-v|--verbose] [-k|--keep] [--ext=path/ext/package.pm] [--inc=/lib/1/path --inc=/lib/2/path] perl_filename.ext\n";
     exit;
 }
 
@@ -29,7 +33,9 @@ if (! @ARGV || ! -f $ARGV[0]) {
 Syntax::Check->new(
     file    => $ARGV[0],
     verbose => $verbose,
-    keep    => $keep
+    keep    => $keep,
+    ext     => $ext_package,
+    inc     => $inc,
 )->check;
 
 __END__
@@ -50,7 +56,7 @@ This binary is a consumer of L<Syntax::Check>
 
 Binary:
 
-    syncheck [--verbose] [--keep] perl_filename.ext
+    syncheck [--verbose] [--keep] [--ext=path/ext/package.pm] [--inc=/lib/path] perl_filename.ext
 
 =head1 ARGUMENTS
 
@@ -62,6 +68,31 @@ temp dir. By default we delete this directory upon program completion.
 =head2 --verbose|-v
 
 Supply this argument to get verbose output.
+
+=head2 --ext=path/ext/package.pm
+
+Optional. When it's set then content of that file will be interpreted as part of main package. 
+As perl allows keep many packages in the same file that helps you have a deal with:
+
+=over 4
+
+=item *
+
+constant exported from uninstalled packages
+
+=item *
+
+functions (even with protothypes) exported from uninstalled packages
+
+=item *
+
+custom artifacts
+
+=back
+
+=head2 --inc=/lib/path
+
+Optional. It defines an additional library path. This is L<options with multiple values|Getopt::Long/"Options-with-multiple-values">
 
 =head2 perl_file.ext
 

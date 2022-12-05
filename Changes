@@ -1,5 +1,10 @@
 Revision history for Syntax-Check
 
+1.10    2022-11-20
+        - Added new argument 'ext' which is resposible for extending the main package
+        - Added tests for 'ext' argument
+        - Version changed up to 1.10 according rules https://semver.org/ minor changes
+
 1.06 UNREL
         -
 

@@ -9,12 +9,16 @@ use Data::Dumper;
 use Exporter qw(import);
 use File::Path qw(make_path);
 use File::Temp qw(tempdir);
+use File::Copy qw(copy);
+use File::Spec qw();
 use Module::Installed qw(module_installed);
 use PPI;
 
-our $VERSION = '1.06';
+our $VERSION = '1.10';
 
 my $SEPARATOR;
+
+my $PRAGMA_RE = qr/^(attributes|autodie|autouse|base|bigint|bignum|bigrat|blib|bytes|charnames|constant|diagnostics|encoding|feature|fields|filetest|if|integer|less|lib|locale|mro|open|ops|overload|overloading|parent|re|sigtrap|sort|strict|subs|threads|threads::shared|utf8|vars|vmsish|warnings|warnings::register)/;
 
 BEGIN {
     if ($^O =~ /^(dos|os2)/i) {
@@ -33,12 +37,27 @@ sub new {
         croak "new() requires a file name as its first parameter";
     }
 
+    if ($p{ext} && (! -f $p{ext} || ! -r _)) {
+        croak "'ext' was sent to new() but it's not a file or unreadable: ".$p{ext};
+    }
+
+    for (@{$p{inc} ||= []}) {
+        croak "'inc' was sent to new() but it's not a directory: ".$_ unless -d $_;
+        push @INC, $_;
+    }
+
     my $self = bless {%p}, $class;
 
     return $self;
 }
+
 sub check {
     my ($self) = @_;
+
+    if ($self->{ext}) {
+        $self->_create_lib_dir;
+        copy($self->{ext}, $self->{lib}."/main.pm") || croak $!;
+    }
 
     my $doc = PPI::Document->new($self->{file});
 
@@ -49,7 +68,7 @@ sub check {
         my $module = $include->module;
         my $package = $module;
 
-        if ($module eq lc $module) {
+        if ($module =~ $PRAGMA_RE) {
             # Skip pragmas
             say "Skipping assumed pragma '$module'" if $self->{verbose};
             next;
@@ -59,9 +78,9 @@ sub check {
 
         $module =~ s|::|/|g;
 
-        if (my ($dir, $file) = $module =~ m|^(.*)/(.*)$|) {
+        if (my ($vol, $dir, $file) = File::Spec->splitpath($module)) {
             $file .= '.pm';
-            my $path = "$dir/$file";
+            my $path = $dir ? "$dir/$file" : $file;
 
             if (module_installed($package)) {
                 # Skip includes that are actually installed
@@ -71,13 +90,14 @@ sub check {
             else {
                 $self->_create_lib_dir;
 
-                if (! -d "$self->{lib}/$dir") {
+                if ($dir && ! -d "$self->{lib}/$dir") {
                     # Create the module directory structure
                     make_path("$self->{lib}/$dir") or die $!;
                 }
 
                 if (! -f "$self->{lib}/$path") {
                     # Create the module file
+                    say "Created temp file '$path'" if $self->{verbose};
                     open my $wfh, '>', "$self->{lib}/$path" or die $!;
                     print $wfh '1;';
                     close $wfh or die $!;
@@ -91,6 +111,7 @@ sub check {
             my $module_file = "$module.pm";
             if (! -f "$self->{lib}/$module_file") {
                 # Create the module file
+                say "Created temp file '$module_file'" if $self->{verbose};
                 open my $wfh, '>', "$self->{lib}/$module_file" or die $!;
                 print $wfh '1;';
                 close $wfh or die $!;
@@ -98,13 +119,16 @@ sub check {
         }
     }
 
-    if (! $self->{lib}) {
-        `perl -c $self->{file}`;
-    }
-    else {
-        `perl -I$self->{lib} -c $self->{file}`;
-    }
+    push @{$self->{inc}}, $self->{lib} if $self->{lib};
+    my $I = join(" ", map {"-I $_"} @{$self->{inc}});
+
+    my $M = $self->{ext} ? "-Mmain" : "";
+
+    say "RUN as: perl $I $M -wc $self->{file}" if $self->{verbose};
+
+    `perl $I $M -wc $self->{file}`;
 }
+
 sub _create_lib_dir {
     my ($self) = @_;
     if (! exists $self->{lib} || ! -d $self->{lib}) {
@@ -113,7 +137,6 @@ sub _create_lib_dir {
         say "Created temp lib dir '$self->{lib}'" if $self->{verbose};
     }
 }
-sub __placeholder {}
 
 1;
 __END__
@@ -169,6 +192,31 @@ Default: False
 Optional, Bool: Enable verbose output.
 
 Default: False
+
+    ext => 'path/to/ext/package.pm'
+
+Optional, String: When it's set then content of that file will be interpreted as part of main package. 
+As perl allows keep many packages in the same file that helps you have a deal with:
+
+=over 4
+
+=item *
+
+constant exported from uninstalled packages
+
+=item *
+
+functions (even with protothypes) exported from uninstalled packages
+
+=item *
+
+custom artifacts
+
+=back
+
+    inc => ['/cust/lib/path/', ...]
+
+Optional, Arrylist of Strings: It defines additional library paths to find installed packages.
 
     $file
 
