@@ -63,14 +63,29 @@ sub check {
 
     my $includes = $doc->find('PPI::Statement::Include');
 
+    my @base_packages = ();
     for my $include (@$includes) {
 
         my $module = $include->module;
         my $package = $module;
 
         if ($module =~ $PRAGMA_RE) {
-            # Skip pragmas
-            say "Skipping assumed pragma '$module'" if $self->{verbose};
+            if ($module eq 'base' and $include->arguments) {
+                my @packages = ($include->arguments)[0]->literal;
+                for my $base_package (@packages) {
+                    push @base_packages, $base_package;
+                    my $base_inc = PPI::Statement::Include->new();
+                    push @{ $base_inc->{children} },
+                        PPI::Token::Word->new('use'),
+                        PPI::Token::Whitespace->new(' '),
+                        PPI::Token::Word->new($base_package),
+                        PPI::Token::Structure->new(';');
+                    push @$includes, $base_inc;
+                }
+            } else {
+                # Skip pragmas
+                say "Skipping assumed pragma '$module'" if $self->{verbose};
+            }
             next;
         }
 
@@ -78,9 +93,10 @@ sub check {
 
         $module =~ s|::|/|g;
 
-        if (my ($vol, $dir, $file) = File::Spec->splitpath($module)) {
+        # if (my ($vol, $dir, $file) = File::Spec->splitpath($module)) {
+            my ($vol, $dir, $file) = File::Spec->splitpath($module);
             $file .= '.pm';
-            my $path = $dir ? "$dir/$file" : $file;
+            my $path = $dir ? File::Spec->catfile($dir, $file) : $file;
 
             if (module_installed($package)) {
                 # Skip includes that are actually installed
@@ -90,39 +106,43 @@ sub check {
             else {
                 $self->_create_lib_dir;
 
-                if ($dir && ! -d "$self->{lib}/$dir") {
+                if ($dir && ! -d File::Spec->catdir($self->{lib}, $dir)) {
                     # Create the module directory structure
-                    make_path("$self->{lib}/$dir") or die $!;
+                    make_path(File::Spec->catdir($self->{lib}, $dir)) or die $!;
                 }
 
-                if (! -f "$self->{lib}/$path") {
+                if (! -f File::Spec->catdir($self->{lib}, $path)) {
                     # Create the module file
                     say "Created temp file '$path'" if $self->{verbose};
-                    open my $wfh, '>', "$self->{lib}/$path" or die $!;
+                    open my $wfh, '>', File::Spec->catdir($self->{lib}, $path) or die $!;
+                    print $wfh "package $package;\n";
                     print $wfh '1;';
                     close $wfh or die $!;
                 }
             }
-        }
-        else {
-            # Single-word module, ie. no directory structure
-            $self->_create_lib_dir;
+        # }
+        # else {
+        #     # Single-word module, ie. no directory structure
+        #     $self->_create_lib_dir;
 
-            my $module_file = "$module.pm";
-            if (! -f "$self->{lib}/$module_file") {
-                # Create the module file
-                say "Created temp file '$module_file'" if $self->{verbose};
-                open my $wfh, '>', "$self->{lib}/$module_file" or die $!;
-                print $wfh '1;';
-                close $wfh or die $!;
-            }
-        }
+        #     my $module_file = "$module.pm";
+        #     if (! -f File::Spec->catdir($self->{lib}, $module_file)) {
+        #         # Create the module file
+        #         say "Created temp file '$module_file'" if $self->{verbose};
+        #         open my $wfh, '>', File::Spec->catdir($self->{lib}, $module_file) or die $!;
+        #         print $wfh 'package '.$module;
+        #         print $wfh '1;';
+        #         close $wfh or die $!;
+        #     }
+        # }
     }
 
     push @{$self->{inc}}, $self->{lib} if $self->{lib};
     my $I = join(" ", map {"-I $_"} @{$self->{inc}});
 
     my $M = $self->{ext} ? "-Mmain" : "";
+
+    $M .= " ".join(" ", map { "-M${_}" } @base_packages) if @base_packages;
 
     say "RUN as: perl $I $M -wc $self->{file}" if $self->{verbose};
 
